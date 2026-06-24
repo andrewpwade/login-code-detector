@@ -19,7 +19,12 @@ public actor IMAPClient {
     private var isEncrypted = false
 
     public init(account: IMAPAccount) {
-        self.init(account: account, transport: StreamIMAPTransport())
+        switch account.security {
+        case .implicitTLS:
+            self.init(account: account, transport: NetworkIMAPTransport())
+        case .startTLS:
+            self.init(account: account, transport: StreamIMAPTransport())
+        }
     }
 
     init(account: IMAPAccount, transport: any IMAPTransport) {
@@ -256,24 +261,32 @@ public actor IMAPClient {
         timeout: TimeInterval,
         clampsReadTimeout: Bool = true
     ) async throws -> String {
-        while true {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
             if let line = popLine(), matches(line: line, prefix: prefix, containingAny: needles) {
                 return line
             }
-            let readTimeout = clampsReadTimeout ? min(timeout, IMAPRuntimeDefaults.readTimeoutSeconds) : timeout
+            let remainingTimeout = max(0, deadline.timeIntervalSinceNow)
+            let readTimeout = clampsReadTimeout ? min(remainingTimeout, IMAPRuntimeDefaults.readTimeoutSeconds) : timeout
             guard let chunk = try await transport.readSome(timeout: readTimeout) else {
                 throw IMAPError.disconnected
             }
             buffer.append(chunk)
         }
+        throw IMAPError.timeout("read")
     }
 
     private func readExact(count: Int, timeout: TimeInterval) async throws -> Data {
-        while buffer.count < count {
-            guard let chunk = try await transport.readSome(timeout: min(timeout, IMAPRuntimeDefaults.readTimeoutSeconds)) else {
+        let deadline = Date().addingTimeInterval(timeout)
+        while buffer.count < count && Date() < deadline {
+            let remainingTimeout = max(0, deadline.timeIntervalSinceNow)
+            guard let chunk = try await transport.readSome(timeout: min(remainingTimeout, IMAPRuntimeDefaults.readTimeoutSeconds)) else {
                 throw IMAPError.disconnected
             }
             buffer.append(chunk)
+        }
+        guard buffer.count >= count else {
+            throw IMAPError.timeout("read")
         }
         let data = buffer.prefix(count)
         buffer.removeFirst(count)
