@@ -1,3 +1,6 @@
+<img width="436" height="566" alt="Screenshot 2026-06-24 at 20 13 06" src="https://github.com/user-attachments/assets/636c0ccc-886c-459a-826d-2c3c90e366a2" />
+
+
 # LoginCodeDetector
 
 LoginCodeDetector is a native macOS menu bar utility that watches an IMAP inbox for one-time login codes. It detects likely 2FA messages locally, shows a notification, and can optionally copy high-confidence codes to the clipboard.
