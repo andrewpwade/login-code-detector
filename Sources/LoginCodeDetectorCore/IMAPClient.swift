@@ -117,7 +117,11 @@ public actor IMAPClient {
                 // Race server activity against a client-side timeout so we periodically re-enter the command loop
                 // and avoid hanging forever on servers with fragile IDLE implementations.
                 group.addTask { [weak self] in
-                    try await self?.readLine(containingAny: ["EXISTS", "RECENT", "FETCH", "EXPUNGE"], timeout: TimeInterval(timeoutSeconds))
+                    try await self?.readLine(
+                        containingAny: ["EXISTS", "RECENT", "FETCH", "EXPUNGE"],
+                        timeout: TimeInterval(timeoutSeconds),
+                        clampsReadTimeout: false
+                    )
                 }
                 group.addTask {
                     try await Task.sleep(for: .seconds(timeoutSeconds))
@@ -249,13 +253,15 @@ public actor IMAPClient {
     private func readLine(
         prefix: String? = nil,
         containingAny needles: [String] = [],
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        clampsReadTimeout: Bool = true
     ) async throws -> String {
         while true {
             if let line = popLine(), matches(line: line, prefix: prefix, containingAny: needles) {
                 return line
             }
-            guard let chunk = try await transport.readSome(timeout: min(timeout, IMAPRuntimeDefaults.readTimeoutSeconds)) else {
+            let readTimeout = clampsReadTimeout ? min(timeout, IMAPRuntimeDefaults.readTimeoutSeconds) : timeout
+            guard let chunk = try await transport.readSome(timeout: readTimeout) else {
                 throw IMAPError.disconnected
             }
             buffer.append(chunk)

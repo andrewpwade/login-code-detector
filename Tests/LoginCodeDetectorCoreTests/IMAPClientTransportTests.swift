@@ -187,6 +187,32 @@ final class IMAPClientTransportTests: XCTestCase {
 
         XCTAssertEqual(mailboxes, ["INBOX", "Codes"])
     }
+
+    func testIdleWaitUsesFullIdleTimeoutForServerActivityRead() async throws {
+        let transport = FakeIMAPTransport(script: [
+            .read("* OK IMAP4 ready\r\n"),
+            .write("A1 IDLE\r\n"),
+            .read("+ idling\r\n"),
+            .read("* 2 EXISTS\r\n"),
+            .write("DONE\r\n"),
+            .read("A1 OK IDLE completed\r\n")
+        ], tlsVerified: true)
+        let client = IMAPClient(
+            account: IMAPAccount(
+                host: "imap.example.com",
+                port: 993,
+                username: "user@example.com",
+                password: "password"
+            ),
+            transport: transport
+        )
+
+        try await client.connect()
+        let reason = try await client.idleUntilMailboxChanges(timeoutSeconds: 60)
+
+        XCTAssertEqual(reason, "* 2 EXISTS")
+        XCTAssertTrue(transport.readTimeouts.contains(60))
+    }
 }
 
 private final class FakeIMAPTransport: IMAPTransport, @unchecked Sendable {
@@ -199,6 +225,7 @@ private final class FakeIMAPTransport: IMAPTransport, @unchecked Sendable {
     private var script: [Step]
     private var tlsVerified: Bool
     private var connected = false
+    private var recordedReadTimeouts: [TimeInterval] = []
 
     init(script: [Step] = [], tlsVerified: Bool = false) {
         self.script = script
@@ -220,6 +247,7 @@ private final class FakeIMAPTransport: IMAPTransport, @unchecked Sendable {
     func readSome(timeout: TimeInterval) async throws -> Data? {
         try await Task.sleep(for: .milliseconds(20))
         return try withLock {
+            recordedReadTimeouts.append(timeout)
             guard connected else {
                 throw IMAPError.disconnected
             }
@@ -233,6 +261,12 @@ private final class FakeIMAPTransport: IMAPTransport, @unchecked Sendable {
             case let .write(expected):
                 throw IMAPError.malformedResponse("Expected client write \(expected)")
             }
+        }
+    }
+
+    var readTimeouts: [TimeInterval] {
+        withLock {
+            recordedReadTimeouts
         }
     }
 
