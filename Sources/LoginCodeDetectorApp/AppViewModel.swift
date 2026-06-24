@@ -76,11 +76,11 @@ final class AppViewModel: ObservableObject {
             shouldShowGettingStarted = shouldShowGettingStartedFlow
             pruneRecentNotifications()
             if await notifications.requestAuthorization() {
-                log("Notification permission ready")
+                logDebug("Notification permission ready")
             } else {
                 log("Notifications unavailable or not authorized")
             }
-            log("Loaded preferences")
+            logDebug("Loaded preferences")
 
             if autoStart, canStart {
                 log("Auto-starting watcher")
@@ -134,7 +134,7 @@ final class AppViewModel: ObservableObject {
                 shouldShowGettingStarted = false
                 isVerifyingAccount = false
                 status = "Account verified"
-                log("IMAP account verified")
+                logDebug("IMAP account verified")
                 start(saveBeforeStart: false)
             } catch {
                 await client.disconnect()
@@ -172,7 +172,7 @@ final class AppViewModel: ObservableObject {
                 isProbingServer = false
                 gettingStartedStep = .folders
                 status = "Using \(result.candidate.host):\(result.candidate.port)"
-                log("Selected IMAP server")
+                logDebug("Selected IMAP server")
             } catch {
                 if let domain = IMAPDiscovery.domain(from: normalizedUsername) {
                     updateFirstAccount { account in
@@ -221,7 +221,7 @@ final class AppViewModel: ObservableObject {
                 isVerifyingAccount = false
                 gettingStartedStep = .folders
                 status = "Login verified"
-                log("IMAP login verified")
+                logDebug("IMAP login verified")
             } catch {
                 await client.disconnect()
                 isVerifyingAccount = false
@@ -254,7 +254,7 @@ final class AppViewModel: ObservableObject {
                 availableMailboxes = WatcherPlan.mailboxesIncludingDefault(mailboxes)
                 isLoadingMailboxes = false
                 status = "Mailboxes loaded"
-                log("Loaded IMAP mailboxes")
+                logDebug("Loaded IMAP mailboxes")
             } catch {
                 await client.disconnect()
                 isLoadingMailboxes = false
@@ -276,7 +276,7 @@ final class AppViewModel: ObservableObject {
                 try await saveCurrentConfiguration()
                 status = "Account configured"
                 gettingStartedStep = .done
-                log("Getting started completed")
+                logDebug("Getting started completed")
                 start(saveBeforeStart: false)
             } catch {
                 status = error.localizedDescription
@@ -401,10 +401,10 @@ final class AppViewModel: ObservableObject {
             switch command {
             case let .deliverNotification(notification, autoCopy):
                 notifications.show(notification, autoCopy: autoCopy) { [weak self] message in
-                    self?.log(message)
+                    self?.logDebug(message)
                 }
             case let .log(message):
-                log(message)
+                logDebug(message)
             }
         }
     }
@@ -416,7 +416,7 @@ final class AppViewModel: ObservableObject {
                 for mailbox in mailboxes {
                     try await stateStore.reset(mailbox: mailbox)
                 }
-                log("Reset UID state; restart watcher to run a recent-only startup scan")
+                logDebug("Reset UID state; restart watcher to run a recent-only startup scan")
             } catch {
                 log("Could not reset UID state: \(error.localizedDescription)")
             }
@@ -429,13 +429,13 @@ final class AppViewModel: ObservableObject {
         }
         clipboard.copy(lastNotification.code)
         status = "Copied code"
-        log("Copied last code from menu")
+        logDebug("Copied last code from menu")
     }
 
     func copyCode(_ notification: CodeNotification) {
         clipboard.copy(notification.code)
         status = "Copied code"
-        log("Copied code from recent history")
+        logDebug("Copied code from recent history")
     }
 
     func setAutoCopyToClipboard(_ isEnabled: Bool) {
@@ -444,7 +444,11 @@ final class AppViewModel: ObservableObject {
     }
 
     private func log(_ message: String) {
-        logger.info("\(message, privacy: .private(mask: .hash))")
+        logger.info("\(message, privacy: .public)")
+    }
+
+    private func logDebug(_ message: String) {
+        logger.debug("\(message, privacy: .public)")
     }
 
     private var hasBlankRequiredAccountSettings: Bool {
