@@ -6,6 +6,7 @@ struct PreferencesView: View {
     @EnvironmentObject private var viewModel: AppViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedPreferencesPane: PreferencesPane = .basic
+    @State private var isShowingMailboxSelection = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,6 +34,14 @@ struct PreferencesView: View {
         .onAppear {
             AppActivation.activate()
             viewModel.load()
+        }
+        .sheet(isPresented: $isShowingMailboxSelection) {
+            MailboxSelectionSheet(
+                selectedMailboxes: accountMailboxesBinding,
+                mailboxes: viewModel.availableMailboxes,
+                isLoading: viewModel.isLoadingMailboxes,
+                status: viewModel.status
+            )
         }
     }
 
@@ -76,7 +85,20 @@ struct PreferencesView: View {
                     .frame(width: 96)
             }
             SettingsFormRow("Mailboxes") {
-                TextField("INBOX, Receipts", text: accountMailboxesTextBinding)
+                HStack(spacing: 10) {
+                    Text(selectedMailboxesDescription)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .foregroundStyle(viewModel.firstAccount.mailboxes.isEmpty ? .secondary : .primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button("Select Mailboxes...") {
+                        isShowingMailboxSelection = true
+                        viewModel.loadAvailableMailboxes()
+                    }
+                    .disabled(viewModel.isLoadingMailboxes)
+                }
             }
             SettingsFormRow("Auto-copy") {
                 Toggle("Copy high-confidence codes automatically", isOn: $viewModel.config.autoCopyToClipboard)
@@ -171,20 +193,12 @@ struct PreferencesView: View {
         )
     }
 
-    private var accountMailboxesTextBinding: Binding<String> {
-        Binding(
-            get: {
-                viewModel.firstAccount.mailboxes.joined(separator: ", ")
-            },
-            set: { value in
-                viewModel.updateFirstAccount { account in
-                    account.mailboxes = value
-                        .split(separator: ",")
-                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                        .filter { !$0.isEmpty }
-                }
-            }
-        )
+    private var selectedMailboxesDescription: String {
+        let mailboxes = viewModel.firstAccount.mailboxes
+        guard !mailboxes.isEmpty else {
+            return "No mailboxes selected"
+        }
+        return mailboxes.joined(separator: ", ")
     }
 
     private func accountStringBinding(_ keyPath: WritableKeyPath<IMAPAccountConfig, String>) -> Binding<String> {
@@ -290,7 +304,6 @@ private enum PreferencesPane: Hashable {
 /// Guided first-run setup UI for discovery, credential verification, and mailbox selection.
 private struct GettingStartedView: View {
     let step: GettingStartedStep
-    @State private var mailboxFilter = ""
     @Binding var username: String
     @Binding var password: String
     @Binding var host: String
@@ -386,7 +399,7 @@ private struct GettingStartedView: View {
                 }
             }
         case .folders:
-            mailboxPicker
+            MailboxPicker(selectedMailboxes: $selectedMailboxes, mailboxes: mailboxes)
         case .done:
             doneContent
         }
@@ -402,74 +415,12 @@ private struct GettingStartedView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var mailboxPicker: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                TextField("Search folders", text: $mailboxFilter)
-                    .frame(maxWidth: 320)
-                Text("\(selectedMailboxes.count) selected")
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-                Button("INBOX") {
-                    selectedMailboxes = mailboxes.filter { $0.uppercased() == "INBOX" }
-                    if selectedMailboxes.isEmpty {
-                        selectedMailboxes = ["INBOX"]
-                    }
-                }
-                Button("All") {
-                    selectedMailboxes = mailboxes
-                }
-                Button("None") {
-                    selectedMailboxes = []
-                }
-            }
-
-            List(filteredMailboxes, id: \.self) { mailbox in
-                Toggle(isOn: mailboxSelectionBinding(mailbox)) {
-                    Text(mailbox)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                .toggleStyle(.checkbox)
-            }
-            .listStyle(.bordered(alternatesRowBackgrounds: true))
-            .frame(minHeight: 260, maxHeight: 340)
-        }
-        .padding(16)
-        .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
     private func onboardingSection<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             content()
         }
         .padding(16)
         .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private var filteredMailboxes: [String] {
-        let query = mailboxFilter.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            return mailboxes
-        }
-        return mailboxes.filter { $0.localizedCaseInsensitiveContains(query) }
-    }
-
-    private func mailboxSelectionBinding(_ mailbox: String) -> Binding<Bool> {
-        Binding(
-            get: {
-                selectedMailboxes.contains { $0.caseInsensitiveCompare(mailbox) == .orderedSame }
-            },
-            set: { isSelected in
-                if isSelected {
-                    if !selectedMailboxes.contains(where: { $0.caseInsensitiveCompare(mailbox) == .orderedSame }) {
-                        selectedMailboxes.append(mailbox)
-                    }
-                } else {
-                    selectedMailboxes.removeAll { $0.caseInsensitiveCompare(mailbox) == .orderedSame }
-                }
-            }
-        )
     }
 
     private var subtitle: String {
@@ -522,6 +473,133 @@ private struct GettingStartedView: View {
         case .done:
             complete()
         }
+    }
+}
+
+/// Shared mailbox selection UI used by onboarding and preferences.
+private struct MailboxPicker: View {
+    @State private var mailboxFilter = ""
+    @Binding var selectedMailboxes: [String]
+    let mailboxes: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                TextField("Search folders", text: $mailboxFilter)
+                    .frame(maxWidth: 320)
+                Text("\(selectedMailboxes.count) selected")
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Button("INBOX") {
+                    selectedMailboxes = mailboxes.filter { $0.uppercased() == "INBOX" }
+                    if selectedMailboxes.isEmpty {
+                        selectedMailboxes = ["INBOX"]
+                    }
+                }
+                Button("All") {
+                    selectedMailboxes = mailboxes
+                }
+                Button("None") {
+                    selectedMailboxes = []
+                }
+            }
+
+            List(filteredMailboxes, id: \.self) { mailbox in
+                Toggle(isOn: mailboxSelectionBinding(mailbox)) {
+                    Text(mailbox)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .toggleStyle(.checkbox)
+            }
+            .listStyle(.bordered(alternatesRowBackgrounds: true))
+            .frame(minHeight: 260, maxHeight: 340)
+        }
+        .padding(16)
+        .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var filteredMailboxes: [String] {
+        let query = mailboxFilter.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return mailboxes
+        }
+        return mailboxes.filter { $0.localizedCaseInsensitiveContains(query) }
+    }
+
+    private func mailboxSelectionBinding(_ mailbox: String) -> Binding<Bool> {
+        Binding(
+            get: {
+                selectedMailboxes.contains { $0.caseInsensitiveCompare(mailbox) == .orderedSame }
+            },
+            set: { isSelected in
+                if isSelected {
+                    if !selectedMailboxes.contains(where: { $0.caseInsensitiveCompare(mailbox) == .orderedSame }) {
+                        selectedMailboxes.append(mailbox)
+                    }
+                } else {
+                    selectedMailboxes.removeAll { $0.caseInsensitiveCompare(mailbox) == .orderedSame }
+                }
+            }
+        )
+    }
+}
+
+/// Modal wrapper for choosing watched mailboxes from the server-provided list.
+private struct MailboxSelectionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedMailboxes: [String]
+    let mailboxes: [String]
+    let isLoading: Bool
+    let status: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Select Mailboxes")
+                    .font(.title3.weight(.semibold))
+                Text("Choose the mailboxes to monitor for login codes.")
+                    .foregroundStyle(.secondary)
+            }
+
+            if isLoading {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.regular)
+                    Text("Loading mailboxes...")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 340, alignment: .center)
+            } else {
+                MailboxPicker(selectedMailboxes: $selectedMailboxes, mailboxes: mailboxes)
+            }
+
+            HStack(spacing: 10) {
+                Text(footerText)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Done") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 560, alignment: .topLeading)
+        .frame(minHeight: 460, alignment: .topLeading)
+    }
+
+    private var footerText: String {
+        if isLoading {
+            return "Loading from server"
+        }
+        if status.hasPrefix("Could not load mailboxes") {
+            return status
+        }
+        return "\(selectedMailboxes.count) selected"
     }
 }
 

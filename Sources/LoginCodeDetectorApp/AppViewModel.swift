@@ -33,6 +33,7 @@ final class AppViewModel: ObservableObject {
     @Published var shouldShowGettingStarted = false
     @Published var gettingStartedStep: GettingStartedStep = .server
     @Published var isProbingServer = false
+    @Published var isLoadingMailboxes = false
     @Published var availableMailboxes: [String] = ["INBOX"]
 
     private let configStore = ConfigStore()
@@ -225,6 +226,39 @@ final class AppViewModel: ObservableObject {
                 await client.disconnect()
                 isVerifyingAccount = false
                 status = "Login failed: \(error.localizedDescription)"
+                log(status)
+            }
+        }
+    }
+
+    func loadAvailableMailboxes() {
+        guard canStart else {
+            status = "Enter IMAP server, username, and app password"
+            return
+        }
+
+        let normalizedConfig = config.normalized()
+        let account = WatcherPlan.account(config: normalizedConfig.accounts[0], password: appPassword)
+
+        isLoadingMailboxes = true
+        status = "Loading mailboxes"
+        log("Loading IMAP mailboxes")
+
+        Task {
+            let client = IMAPClient(account: account)
+            do {
+                try await connectWithTimeout(client)
+                try await client.login()
+                let mailboxes = try await client.listMailboxes()
+                await client.disconnect()
+                availableMailboxes = WatcherPlan.mailboxesIncludingDefault(mailboxes)
+                isLoadingMailboxes = false
+                status = "Mailboxes loaded"
+                log("Loaded IMAP mailboxes")
+            } catch {
+                await client.disconnect()
+                isLoadingMailboxes = false
+                status = "Could not load mailboxes: \(error.localizedDescription)"
                 log(status)
             }
         }
