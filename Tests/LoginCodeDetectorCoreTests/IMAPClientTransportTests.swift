@@ -51,6 +51,26 @@ final class IMAPClientTransportTests: XCTestCase {
         }
     }
 
+    func testLoginPreservesPasswordWhitespace() async throws {
+        let transport = FakeIMAPTransport(script: [
+            .read("* OK IMAP4 ready\r\n"),
+            .write("A1 LOGIN \"user@example.com\" \"  pass word  \"\r\n"),
+            .read("A1 OK LOGIN completed\r\n")
+        ], tlsVerified: true)
+        let client = IMAPClient(
+            account: IMAPAccount(
+                host: "imap.example.com",
+                port: 993,
+                username: "user@example.com",
+                password: "  pass word  "
+            ),
+            transport: transport
+        )
+
+        try await client.connect()
+        try await client.login()
+    }
+
     func testStartTLSFailureIsSurfacedWhenCapabilityIsMissing() async throws {
         let transport = FakeIMAPTransport(script: [
             .read("* OK IMAP4 ready\r\n"),

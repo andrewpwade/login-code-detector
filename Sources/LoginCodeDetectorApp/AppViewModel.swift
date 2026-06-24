@@ -296,7 +296,10 @@ final class AppViewModel: ObservableObject {
         guard let account = config.normalized().accounts.first else {
             return false
         }
-        return !account.host.isEmpty && !account.username.isEmpty && !account.mailboxes.isEmpty && !appPassword.isEmpty
+        return !account.host.isEmpty
+            && !account.username.isEmpty
+            && !account.mailboxes.isEmpty
+            && !appPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var canVerifyAccount: Bool {
@@ -305,7 +308,21 @@ final class AppViewModel: ObservableObject {
 
     var canDiscoverAccount: Bool {
         let account = config.normalized().accounts[0]
-        return !account.username.isEmpty && !appPassword.isEmpty && !isProbingServer
+        return !account.username.isEmpty
+            && !appPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !isProbingServer
+    }
+
+    var firstAccount: IMAPAccountConfig {
+        config.accounts.first ?? IMAPAccountConfig()
+    }
+
+    func updateFirstAccount(_ update: (inout IMAPAccountConfig) -> Void) {
+        if config.accounts.isEmpty {
+            config.accounts = [IMAPAccountConfig()]
+        }
+        // The UI currently edits a single account flow, so always materialize slot zero before mutating it.
+        update(&config.accounts[0])
     }
 
     func stop() {
@@ -398,7 +415,9 @@ final class AppViewModel: ObservableObject {
 
     private var hasBlankRequiredAccountSettings: Bool {
         let account = config.normalized().accounts[0]
-        return account.host.isEmpty || account.username.isEmpty || appPassword.isEmpty
+        return account.host.isEmpty
+            || account.username.isEmpty
+            || appPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var shouldShowGettingStartedFlow: Bool {
@@ -449,14 +468,6 @@ final class AppViewModel: ObservableObject {
             $0.identifier?.rawValue == AppUIConstants.gettingStartedWindowIdentifier
         }
         gettingStartedWindow?.close()
-    }
-
-    private func updateFirstAccount(_ update: (inout IMAPAccountConfig) -> Void) {
-        if config.accounts.isEmpty {
-            config.accounts = [IMAPAccountConfig()]
-        }
-        // The UI currently edits a single account flow, so always materialize slot zero before mutating it.
-        update(&config.accounts[0])
     }
 
     private func connectWithTimeout(_ client: IMAPClient, seconds: UInt64 = UInt64(AppRuntimeDefaults.connectionTimeoutSeconds)) async throws {

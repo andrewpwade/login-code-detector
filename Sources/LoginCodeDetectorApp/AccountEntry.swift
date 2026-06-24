@@ -16,7 +16,6 @@ struct AccountEntry: Identifiable, Equatable {
     var normalized: AccountEntry {
         var entry = self
         entry.config = entry.config.normalized()
-        entry.password = entry.password.trimmingCharacters(in: .whitespacesAndNewlines)
         return entry
     }
 
@@ -25,7 +24,7 @@ struct AccountEntry: Identifiable, Equatable {
         return !entry.config.host.isEmpty
             && !entry.config.username.isEmpty
             && !entry.config.mailboxes.isEmpty
-            && !entry.password.isEmpty
+            && !entry.password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var keychainKey: String? {

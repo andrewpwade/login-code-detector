@@ -1,6 +1,8 @@
 # LoginCodeDetector
 
-Native macOS menu bar utility for watching an IMAP inbox for one-time codes.
+LoginCodeDetector is a native macOS menu bar utility that watches an IMAP inbox for one-time login codes. It detects likely 2FA messages locally, shows a notification, and can optionally copy high-confidence codes to the clipboard.
+
+This repository is published as source code only. No signed, notarized, or packaged `.app` release is currently provided.
 
 ## Requirements
 
@@ -8,7 +10,7 @@ Native macOS menu bar utility for watching an IMAP inbox for one-time codes.
 - Swift 6 / Xcode with Swift 6 support
 - An IMAP account with an app password or equivalent credential
 
-## Development
+## Build and Run
 
 ```sh
 swift test
@@ -17,30 +19,56 @@ swift run LoginCodeDetector
 
 `swift run` starts the menu bar UI for development, but macOS notification delivery requires launching from a real `.app` bundle. The development executable disables `UNUserNotificationCenter` setup to avoid crashing outside an app bundle.
 
-For a real app bundle, open `Package.swift` in Xcode, select the `LoginCodeDetectorApp` scheme, and run it from Xcode. That launches the app as a proper macOS bundle so notifications work.
-
-No signed release build is published yet.
+For a proper app bundle during development, open `Package.swift` in Xcode, select the `LoginCodeDetectorApp` scheme, and run it from Xcode.
 
 ## IMAP Setup
 
-The getting started wizard can discover the IMAP server from your email address and app password. It tries provider defaults, autoconfig endpoints, and common IMAP hostnames, then verifies the account before asking which mailboxes to watch.
+The first-run setup flow asks for an email address and app password, then tries to discover a secure IMAP server. Discovery uses provider defaults, autoconfig endpoints, and common IMAP hostnames. If discovery fails, you can enter the IMAP server manually.
 
-You can still enter your IMAP username, app password, server, port, and mailboxes manually in Preferences. The app supports implicit TLS IMAP, typically on port `993`, and STARTTLS on port `143`. It uses IMAP IDLE when available and falls back to polling.
+The app supports:
 
-The configuration is stored as an account list for future multi-account support, but the app currently watches only the first account.
+- Implicit TLS IMAP, typically port `993`
+- STARTTLS IMAP, typically port `143`
+- IMAP IDLE when supported by the server
+- Polling fallback when IDLE is unavailable or disabled
+- One configured IMAP account with one or more watched mailboxes
 
-Codes are parsed locally. Credentials are stored in macOS Keychain.
+Passwords are never sent until TLS is active and certificate verification has succeeded. Plaintext IMAP login is refused.
 
-## Privacy
+## Privacy and Storage
 
-Mail is read over IMAP and code detection runs locally. Credentials are stored in macOS Keychain. App settings are stored in `~/Library/Application Support/LoginCodeDetector/config.json`.
+Code detection runs locally on message content fetched through IMAP. Credentials are stored in macOS Keychain. App settings are stored in:
 
-If auto-copy is enabled, high-confidence codes are written to the macOS clipboard.
+```text
+~/Library/Application Support/LoginCodeDetector/config.json
+```
+
+Mailbox UID state is stored in:
+
+```text
+~/Library/Application Support/LoginCodeDetector/uid-state.json
+```
+
+If auto-copy is enabled, high-confidence codes are written to the macOS clipboard. Clipboard contents are visible to other local apps with pasteboard access, so leave auto-copy disabled if that tradeoff is not acceptable.
+
+See `PRIVACY.md` for the concise privacy statement.
+
+## Security Notes
+
+- Use an app-specific password when your email provider supports it.
+- The app requires TLS for IMAP login.
+- Logs use private OSLog formatting for runtime status messages.
+- This is a local utility, not a hosted service.
+
+To report a security issue, see `SECURITY.md`.
 
 ## Limitations
 
-Only one account is currently supported. IMAP is the only supported mail protocol. Code detection is heuristic and may miss some messages or identify non-2FA messages.
+- Only one IMAP account is supported in the current UI.
+- OAuth-based mail login is not supported.
+- Code detection is heuristic and can miss messages or identify non-2FA messages.
+- No signed release build is published yet.
 
 ## License
 
-No license is granted. All rights reserved.
+No license is granted. All rights reserved. See `LICENSE`.

@@ -149,10 +149,10 @@ struct PreferencesView: View {
     private var accountPortBinding: Binding<Int> {
         Binding(
             get: {
-                firstAccount().port
+                viewModel.firstAccount.port
             },
             set: { value in
-                updateFirstAccount { account in
+                viewModel.updateFirstAccount { account in
                     account.port = value
                 }
             }
@@ -162,10 +162,10 @@ struct PreferencesView: View {
     private var accountMailboxesBinding: Binding<[String]> {
         Binding(
             get: {
-                firstAccount().mailboxes
+                viewModel.firstAccount.mailboxes
             },
             set: { value in
-                updateFirstAccount { account in
+                viewModel.updateFirstAccount { account in
                     account.mailboxes = value
                 }
             }
@@ -175,10 +175,10 @@ struct PreferencesView: View {
     private var accountMailboxesTextBinding: Binding<String> {
         Binding(
             get: {
-                firstAccount().mailboxes.joined(separator: ", ")
+                viewModel.firstAccount.mailboxes.joined(separator: ", ")
             },
             set: { value in
-                updateFirstAccount { account in
+                viewModel.updateFirstAccount { account in
                     account.mailboxes = value
                         .split(separator: ",")
                         .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -191,25 +191,14 @@ struct PreferencesView: View {
     private func accountStringBinding(_ keyPath: WritableKeyPath<IMAPAccountConfig, String>) -> Binding<String> {
         Binding(
             get: {
-                firstAccount()[keyPath: keyPath]
+                viewModel.firstAccount[keyPath: keyPath]
             },
             set: { value in
-                updateFirstAccount { account in
+                viewModel.updateFirstAccount { account in
                     account[keyPath: keyPath] = value
                 }
             }
         )
-    }
-
-    private func firstAccount() -> IMAPAccountConfig {
-        viewModel.config.accounts.first ?? IMAPAccountConfig()
-    }
-
-    private func updateFirstAccount(_ update: (inout IMAPAccountConfig) -> Void) {
-        if viewModel.config.accounts.isEmpty {
-            viewModel.config.accounts = [IMAPAccountConfig()]
-        }
-        update(&viewModel.config.accounts[0])
     }
 
     private func settingsSection<Content: View>(
@@ -256,10 +245,10 @@ struct GettingStartedWindowView: View {
     private var accountPortBinding: Binding<Int> {
         Binding(
             get: {
-                firstAccount().port
+                viewModel.firstAccount.port
             },
             set: { value in
-                updateFirstAccount { account in
+                viewModel.updateFirstAccount { account in
                     account.port = value
                 }
             }
@@ -269,10 +258,10 @@ struct GettingStartedWindowView: View {
     private var accountMailboxesBinding: Binding<[String]> {
         Binding(
             get: {
-                firstAccount().mailboxes
+                viewModel.firstAccount.mailboxes
             },
             set: { value in
-                updateFirstAccount { account in
+                viewModel.updateFirstAccount { account in
                     account.mailboxes = value
                 }
             }
@@ -282,25 +271,14 @@ struct GettingStartedWindowView: View {
     private func accountStringBinding(_ keyPath: WritableKeyPath<IMAPAccountConfig, String>) -> Binding<String> {
         Binding(
             get: {
-                firstAccount()[keyPath: keyPath]
+                viewModel.firstAccount[keyPath: keyPath]
             },
             set: { value in
-                updateFirstAccount { account in
+                viewModel.updateFirstAccount { account in
                     account[keyPath: keyPath] = value
                 }
             }
         )
-    }
-
-    private func firstAccount() -> IMAPAccountConfig {
-        viewModel.config.accounts.first ?? IMAPAccountConfig()
-    }
-
-    private func updateFirstAccount(_ update: (inout IMAPAccountConfig) -> Void) {
-        if viewModel.config.accounts.isEmpty {
-            viewModel.config.accounts = [IMAPAccountConfig()]
-        }
-        update(&viewModel.config.accounts[0])
     }
 }
 
