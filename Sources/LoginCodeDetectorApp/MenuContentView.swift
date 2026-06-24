@@ -42,11 +42,6 @@ struct MenuContentView: View {
             Toggle("Auto-copy codes", isOn: autoCopyBinding)
 
             HStack {
-                Button(viewModel.isRunning ? "Stop" : "Start") {
-                    viewModel.isRunning ? viewModel.stop() : viewModel.start()
-                }
-                .keyboardShortcut(.defaultAction)
-
                 Button("Preferences") {
                     openSettings()
                     Task { @MainActor in

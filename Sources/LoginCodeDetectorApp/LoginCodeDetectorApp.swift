@@ -35,6 +35,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewModel.load()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        viewModel.stop()
+    }
+
     func applicationDidBecomeActive(_ notification: Notification) {
         presentGettingStartedWindowIfNeeded()
     }

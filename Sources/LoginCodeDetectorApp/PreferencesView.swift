@@ -4,6 +4,7 @@ import SwiftUI
 /// Settings window UI for onboarding, connection settings, and advanced detection preferences.
 struct PreferencesView: View {
     @EnvironmentObject private var viewModel: AppViewModel
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedPreferencesPane: PreferencesPane = .basic
 
     var body: some View {
@@ -20,11 +21,9 @@ struct PreferencesView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button("Save") {
                     viewModel.save()
+                    dismiss()
                 }
-                Button(viewModel.isRunning ? "Restart Watcher" : "Start Watcher") {
-                    viewModel.start()
-                }
-                .disabled(viewModel.isVerifyingAccount)
+                .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, 24)
